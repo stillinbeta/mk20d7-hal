@@ -2,7 +2,7 @@ use cast::u32;
 use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m::peripheral::SYST;
 
-use hal::blocking::delay::{DelayMs, DelayUs};
+use hal::delay::blocking::{DelayMs, DelayUs};
 use sim::SystemIntegrationModule;
 
 pub struct Delay<'a> {
@@ -23,29 +23,33 @@ impl<'a> Delay<'a> {
 }
 
 impl<'a> DelayMs<u32> for Delay<'a> {
-    fn delay_ms(&mut self, ms: u32) {
-        self.delay_us(ms * 1_000);
+    type Error = crate::Error;
+    fn delay_ms(&mut self, ms: u32) -> Result<(), Self::Error> {
+        self.delay_us(ms * 1_000)
     }
 }
 
 impl<'a> DelayMs<u16> for Delay<'a> {
-    fn delay_ms(&mut self, ms: u16) {
-        self.delay_ms(u32(ms));
+    type Error = crate::Error;
+    fn delay_ms(&mut self, ms: u16) -> Result<(), Self::Error> {
+        self.delay_ms(u32(ms))
     }
 }
 
 impl<'a> DelayMs<u8> for Delay<'a> {
-    fn delay_ms(&mut self, ms: u8) {
-        self.delay_ms(u32(ms));
+    type Error = crate::Error;
+    fn delay_ms(&mut self, ms: u8) -> Result<(), Self::Error> {
+        self.delay_ms(u32(ms))
     }
 }
 
 impl<'a> DelayUs<u32> for Delay<'a> {
-    fn delay_us(&mut self, us: u32) {
+    type Error = crate::Error;
+    fn delay_us(&mut self, us: u32) -> Result<(), Self::Error> {
         let rvr = us * u32::from(self.sim.get_frequencies().0);
 
         if rvr > (1 << 24) {
-            panic!("Delay must be between 1 and 0x00ffffff (1 << 24).");
+            return Err(crate::Error::InvalidDelay);
         }
 
         self.syst.set_reload(rvr);
@@ -55,17 +59,20 @@ impl<'a> DelayUs<u32> for Delay<'a> {
         while !self.syst.has_wrapped() {}
 
         self.syst.disable_counter();
+        Ok(())
     }
 }
 
 impl<'a> DelayUs<u16> for Delay<'a> {
-    fn delay_us(&mut self, us: u16) {
+    type Error = crate::Error;
+    fn delay_us(&mut self, us: u16) -> Result<(), Self::Error> {
         self.delay_us(u32(us))
     }
 }
 
 impl<'a> DelayUs<u8> for Delay<'a> {
-    fn delay_us(&mut self, us: u8) {
+    type Error = crate::Error;
+    fn delay_us(&mut self, us: u8) -> Result<(), Self::Error> {
         self.delay_us(u32(us))
     }
 }

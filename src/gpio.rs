@@ -91,9 +91,9 @@ macro_rules! gpio {
         pub mod $gpiox {
             use core::marker::PhantomData;
 
-            use hal::digital::{
+            use hal::digital::blocking::{
                 OutputPin, StatefulOutputPin, InputPin,
-                toggleable,
+                // toggleable,
             };
 
             use mk20d7::{sim::SCGC5, $PORTX, $PTX, $portx, $ptx};
@@ -406,34 +406,36 @@ macro_rules! gpio {
                 }
 
                 impl<MODE> StatefulOutputPin for $PTXi<Output<MODE>> {
-                    fn is_set_high(&self) -> bool {
-                        !self.is_set_low()
+                    fn is_set_high(&self) -> Result<bool, Self::Error> {
+                        self.is_set_low().map(|v| !v)
                     }
 
-                    fn is_set_low(&self) -> bool {
-                        (PDOR { _0: () }).pdor().read().bits() & (1 << $i) == 0
+                    fn is_set_low(&self) -> Result<bool, Self::Error> {
+                        Ok((PDOR { _0: () }).pdor().read().bits() & (1 << $i) == 0)
                     }
                 }
 
                 impl<MODE> OutputPin for $PTXi<Output<MODE>> {
-                    fn set_high(&mut self) {
-                        (PSOR { _0: () }).psor().write(|w| unsafe { w.bits(1 << $i) })
+                    type Error = crate::Error;
+                    fn set_high(&mut self) -> Result<(), Self::Error>{
+                        Ok((PSOR { _0: () }).psor().write(|w| unsafe { w.bits(1 << $i) }))
                     }
 
-                    fn set_low(&mut self) {
-                        (PCOR { _0: () }).pcor().write(|w| unsafe { w.bits(1 << $i) })
+                    fn set_low(&mut self) -> Result<(), Self::Error>{
+                        Ok( (PCOR { _0: () }).pcor().write(|w| unsafe { w.bits(1 << $i) }) )
                     }
                 }
 
-                impl<MODE> toggleable::Default for $PTXi<Output<MODE>> {}
+                // impl<MODE> toggleable::Default for $PTXi<Output<MODE>> {}
 
                 impl<MODE> InputPin for $PTXi<Input<MODE>> {
-                    fn is_high(&self) -> bool {
-                        !self.is_low()
+                    type Error = crate::Error;
+                    fn is_high(&self) -> Result<bool, Self::Error> {
+                        self.is_low().map(|v| !v)
                     }
 
-                    fn is_low(&self) -> bool {
-                        (PDIR { _0: () }).pdir().read().bits() & (1 << $i) == 0
+                    fn is_low(&self) -> Result<bool,Self::Error>  {
+                        Ok((PDIR { _0: () }).pdir().read().bits() & (1 << $i) == 0)
                     }
                 }
             )+

@@ -1,22 +1,22 @@
-use core::marker::PhantomData;
 use core::convert::TryFrom;
+use core::marker::PhantomData;
 
-use nb;
-use bitrate::{Bps, Hertz};
 use bit_field::BitField;
-use hal::serial;
+use bitrate::{Bps, Hertz};
+use hal::serial::nb as serial;
 use mk20d7::{self, UART0, UART1, UART2};
+use nb;
 use void::Void;
 
-use mcg::MultipurposeClockGenerator;
 use gpio::{
-    Alternate, ALT2, ALT3,
     gpioa::{PTA1, PTA2},
     gpiob::{PTB16, PTB17},
     gpioc::{PTC3, PTC4},
     gpiod::{PTD2, PTD3, PTD6, PTD7},
     gpioe::{PTE0, PTE1},
+    Alternate, ALT2, ALT3,
 };
+use mcg::MultipurposeClockGenerator;
 
 /// Interrupt event
 pub enum Event {
@@ -77,7 +77,6 @@ unsafe impl TxPin<UART1> for PTE0<Alternate<ALT3>> {}
 // UART 2 PTD
 unsafe impl RxPin<UART1> for PTD2<Alternate<ALT3>> {}
 unsafe impl TxPin<UART1> for PTD3<Alternate<ALT3>> {}
-
 
 /// Serial abstraction
 pub struct Serial<UART, PINS> {
