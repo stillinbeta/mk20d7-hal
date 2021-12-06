@@ -1,4 +1,5 @@
-use mk20d7::{sim::RegisterBlock, sim::clkdiv1};
+use bitrate::MegaHertz;
+use mk20d7::{sim::clkdiv1, sim::RegisterBlock};
 
 pub const MAXIMUM_CLOCK_FREQUENCY: u8 = 72;
 
@@ -7,85 +8,83 @@ pub struct SystemIntegrationModule<'a> {
 }
 
 impl<'a> SystemIntegrationModule<'a> {
-    pub fn new (sim: &'a RegisterBlock) -> SystemIntegrationModule<'a> {
+    pub fn new(sim: &'a RegisterBlock) -> SystemIntegrationModule<'a> {
         SystemIntegrationModule { sim }
     }
 
     pub fn set_dividers(&mut self, core: u8, bus: u8, flash: u8) {
-        self.sim.clkdiv1.write(
-            |w| {
-                {
-                    let core_w = w.outdiv1();
-                    match core {
-                        1 => core_w._0000(),
-                        2 => core_w._0001(),
-                        3 => core_w._0010(),
-                        4 => core_w._0011(),
-                        5 => core_w._0100(),
-                        6 => core_w._0101(),
-                        7 => core_w._0110(),
-                        8 => core_w._0111(),
-                        9 => core_w._1000(),
-                        10 => core_w._1001(),
-                        11 => core_w._1010(),
-                        12 => core_w._1011(),
-                        13 => core_w._1100(),
-                        14 => core_w._1101(),
-                        15 => core_w._1110(),
-                        16 => core_w._1111(),
-                        _ => panic!("Must use core value in range [1, 16]!"),
-                    };
-                }
-
-                {
-                    let bus_w = w.outdiv2();
-                    match bus {
-                        1 => bus_w._0000(),
-                        2 => bus_w._0001(),
-                        3 => bus_w._0010(),
-                        4 => bus_w._0011(),
-                        5 => bus_w._0100(),
-                        6 => bus_w._0101(),
-                        7 => bus_w._0110(),
-                        8 => bus_w._0111(),
-                        9 => bus_w._1000(),
-                        10 => bus_w._1001(),
-                        11 => bus_w._1010(),
-                        12 => bus_w._1011(),
-                        13 => bus_w._1100(),
-                        14 => bus_w._1101(),
-                        15 => bus_w._1110(),
-                        16 => bus_w._1111(),
-                        _ => panic!("Must use bus value in range [1, 16]!"),
-                    };
-                }
-
-                {
-                    let flash_w = w.outdiv4();
-                    match flash {
-                        1 => flash_w._0000(),
-                        2 => flash_w._0001(),
-                        3 => flash_w._0010(),
-                        4 => flash_w._0011(),
-                        5 => flash_w._0100(),
-                        6 => flash_w._0101(),
-                        7 => flash_w._0110(),
-                        8 => flash_w._0111(),
-                        9 => flash_w._1000(),
-                        10 => flash_w._1001(),
-                        11 => flash_w._1010(),
-                        12 => flash_w._1011(),
-                        13 => flash_w._1100(),
-                        14 => flash_w._1101(),
-                        15 => flash_w._1110(),
-                        16 => flash_w._1111(),
-                        _ => panic!("Must use flash value in range [1, 16]!"),
-                    };
-                }
-
-                w
+        self.sim.clkdiv1.write(|w| {
+            {
+                let core_w = w.outdiv1();
+                match core {
+                    1 => core_w._0000(),
+                    2 => core_w._0001(),
+                    3 => core_w._0010(),
+                    4 => core_w._0011(),
+                    5 => core_w._0100(),
+                    6 => core_w._0101(),
+                    7 => core_w._0110(),
+                    8 => core_w._0111(),
+                    9 => core_w._1000(),
+                    10 => core_w._1001(),
+                    11 => core_w._1010(),
+                    12 => core_w._1011(),
+                    13 => core_w._1100(),
+                    14 => core_w._1101(),
+                    15 => core_w._1110(),
+                    16 => core_w._1111(),
+                    _ => panic!("Must use core value in range [1, 16]!"),
+                };
             }
-        )
+
+            {
+                let bus_w = w.outdiv2();
+                match bus {
+                    1 => bus_w._0000(),
+                    2 => bus_w._0001(),
+                    3 => bus_w._0010(),
+                    4 => bus_w._0011(),
+                    5 => bus_w._0100(),
+                    6 => bus_w._0101(),
+                    7 => bus_w._0110(),
+                    8 => bus_w._0111(),
+                    9 => bus_w._1000(),
+                    10 => bus_w._1001(),
+                    11 => bus_w._1010(),
+                    12 => bus_w._1011(),
+                    13 => bus_w._1100(),
+                    14 => bus_w._1101(),
+                    15 => bus_w._1110(),
+                    16 => bus_w._1111(),
+                    _ => panic!("Must use bus value in range [1, 16]!"),
+                };
+            }
+
+            {
+                let flash_w = w.outdiv4();
+                match flash {
+                    1 => flash_w._0000(),
+                    2 => flash_w._0001(),
+                    3 => flash_w._0010(),
+                    4 => flash_w._0011(),
+                    5 => flash_w._0100(),
+                    6 => flash_w._0101(),
+                    7 => flash_w._0110(),
+                    8 => flash_w._0111(),
+                    9 => flash_w._1000(),
+                    10 => flash_w._1001(),
+                    11 => flash_w._1010(),
+                    12 => flash_w._1011(),
+                    13 => flash_w._1100(),
+                    14 => flash_w._1101(),
+                    15 => flash_w._1110(),
+                    16 => flash_w._1111(),
+                    _ => panic!("Must use flash value in range [1, 16]!"),
+                };
+            }
+
+            w
+        })
     }
 
     pub fn get_dividers(&self) -> (u8, u8, u8) {
@@ -151,12 +150,18 @@ impl<'a> SystemIntegrationModule<'a> {
         (core, bus, flash)
     }
 
-    pub fn get_frequencies(&self) -> (u8, u8, u8) {
+    pub fn get_frequencies<'b>(&self, mcgoutclk: MegaHertz<u32>) -> (u32, u32, u32) {
+        let freq: u32 = mcgoutclk.0;
+
         let (core, bus, flash) = self.get_dividers();
         (
-            MAXIMUM_CLOCK_FREQUENCY / core,
-            MAXIMUM_CLOCK_FREQUENCY / bus,
-            MAXIMUM_CLOCK_FREQUENCY / flash,
+            freq / u32::from(core),
+            freq / u32::from(bus),
+            freq / u32::from(flash),
         )
+    }
+
+    pub(crate) fn enable_i2c0(&mut self) {
+        self.sim.scgc4.write(|w| w.i2c0().set_bit());
     }
 }

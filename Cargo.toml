@@ -7,6 +7,8 @@ description = "HAL for the MK20D7 family of microcontrollers"
 keywords = ["arm", "cortex-m", "mk20", "hal"]
 license = "MIT"
 repository = "https://github.com/dfrankland/mk20d7-hal"
+edition = "2021"
+
 
 [dependencies]
 cortex-m = "0.5.2"
@@ -14,6 +16,7 @@ mk20d7 = "0.1.1"
 bitrate = "0.1.1"
 nb = "0.1.1"
 bit_field = "0.9.0"
+cmim = "0.2.1"
 
 [dependencies.embedded-hal]
 version = "1.0.0-alpha.5"
@@ -28,3 +31,4 @@ version = "1.0.2"
 
 [features]
 rt = ["mk20d7/rt"]
+default = ["rt"]

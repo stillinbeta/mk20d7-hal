@@ -8,7 +8,7 @@ use mk20d7::{self, UART0, UART1, UART2};
 use nb;
 use void::Void;
 
-use gpio::{
+use crate::gpio::{
     gpioa::{PTA1, PTA2},
     gpiob::{PTB16, PTB17},
     gpioc::{PTC3, PTC4},
@@ -16,7 +16,7 @@ use gpio::{
     gpioe::{PTE0, PTE1},
     Alternate, ALT2, ALT3,
 };
-use mcg::MultipurposeClockGenerator;
+use crate::mcg::MultipurposeClockGenerator;
 
 /// Interrupt event
 pub enum Event {

@@ -2,19 +2,25 @@ use cast::u32;
 use cortex_m::peripheral::syst::SystClkSource;
 use cortex_m::peripheral::SYST;
 
+use crate::mcg::MultipurposeClockGenerator;
+use crate::sim::SystemIntegrationModule;
 use hal::delay::blocking::{DelayMs, DelayUs};
-use sim::SystemIntegrationModule;
 
 pub struct Delay<'a> {
     sim: &'a SystemIntegrationModule<'a>,
+    mcg: &'a MultipurposeClockGenerator<'a>,
     syst: SYST,
 }
 
 impl<'a> Delay<'a> {
-    pub fn new(mut syst: SYST, sim: &'a SystemIntegrationModule<'a>) -> Self {
+    pub fn new(
+        mut syst: SYST,
+        sim: &'a SystemIntegrationModule<'a>,
+        mcg: &'a MultipurposeClockGenerator,
+    ) -> Self {
         syst.set_clock_source(SystClkSource::Core);
 
-        Delay { syst, sim }
+        Delay { syst, mcg, sim }
     }
 
     pub fn free(self) -> SYST {
@@ -46,7 +52,9 @@ impl<'a> DelayMs<u8> for Delay<'a> {
 impl<'a> DelayUs<u32> for Delay<'a> {
     type Error = crate::Error;
     fn delay_us(&mut self, us: u32) -> Result<(), Self::Error> {
-        let rvr = us * u32::from(self.sim.get_frequencies().0);
+        let mcgoutclk = self.mcg.mcgoutclk();
+        let (core, _, _) = self.sim.get_frequencies(mcgoutclk);
+        let rvr = us * u32::from(core);
 
         if rvr > (1 << 24) {
             return Err(crate::Error::InvalidDelay);

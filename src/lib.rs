@@ -11,6 +11,7 @@ extern crate void;
 
 pub mod delay;
 pub mod gpio;
+pub mod i2c;
 pub mod mcg;
 pub mod osc;
 pub mod prelude;
