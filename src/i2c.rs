@@ -11,7 +11,10 @@ use core::{
     marker::PhantomData,
     sync::atomic::{AtomicBool, Ordering},
 };
-use hal::i2c::{blocking::Write, SevenBitAddress};
+use hal::i2c::{
+    blocking::{Read, Write},
+    SevenBitAddress,
+};
 use mk20d7::interrupt;
 
 pub trait Sda: private::Sealed {}
@@ -58,6 +61,18 @@ impl<SDA, SCL> I2C0<SDA, SCL> {
 
         todo!()
     }
+
+    fn run_interrupt(&self, mode: I2CMode, address: SevenBitAddress) {
+        {
+            let mut done = AtomicBool::new(false);
+            let state = I2CState::new(mode, address, &self.i2c, &mut done);
+            I2C0_STATE.try_move(state).ok();
+
+            while !done.load(Ordering::Relaxed) {
+                cortex_m::asm::wfi()
+            }
+        }
+    }
 }
 
 impl<SDA, SCL> Write<SevenBitAddress> for I2C0<SDA, SCL>
@@ -68,15 +83,24 @@ where
     type Error = crate::Error;
     fn write(&mut self, address: SevenBitAddress, buffer: &[u8]) -> Result<(), Self::Error> {
         self.i2c.c1.write(|w| w.iicie().set_bit());
-        {
-            let mut done = AtomicBool::new(false);
-            let state = I2CState::new(I2CMode::PrimaryRx, address, &self.i2c, buffer, &mut done);
-            I2C0_STATE.try_move(state).ok();
 
-            while !done.load(Ordering::Relaxed) {
-                cortex_m::asm::wfi()
-            }
-        }
+        self.run_interrupt(I2CMode::PrimaryTx(buffer), address);
+
+        self.i2c.c1.write(|w| w.iicie().clear_bit());
+        Ok(())
+    }
+}
+
+impl<SDA, SCL> Read<SevenBitAddress> for I2C0<SDA, SCL>
+where
+    SDA: Sda,
+    SCL: Scl,
+{
+    type Error = crate::Error;
+    fn read(&mut self, address: SevenBitAddress, buffer: &mut [u8]) -> Result<(), Self::Error> {
+        self.i2c.c1.write(|w| w.iicie().set_bit());
+
+        self.run_interrupt(I2CMode::PrimaryRx(buffer), address);
 
         self.i2c.c1.write(|w| w.iicie().clear_bit());
         Ok(())
@@ -119,15 +143,16 @@ fn find_freq(target: u32, bus: u32) -> (u8, u8) {
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Copy, Clone)]
 enum I2CMode {
-    PrimaryTx,
-    PrimaryRx,
+    PrimaryTx(*const [u8]),
+    PrimaryRx(*mut [u8]),
     SecondaryTx,
     SecondaryRx,
 }
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 enum I2CStatus {
-    AddressSend(SevenBitAddress), // TODO(ekf): parameterise
+    // AddressSendTen(TenBitAddress), // TODO(ekf): how to handle 10-bit addresses?
+    AddressSend(SevenBitAddress),
     AddressSent,
     Run(usize),
 }
@@ -136,7 +161,6 @@ struct I2CState {
     mode: I2CMode,
     status: I2CStatus,
     i2c: *const mk20d7::I2C0,
-    buffer: *const [u8],
     done: *mut AtomicBool,
 }
 
@@ -147,13 +171,11 @@ impl I2CState {
         mode: I2CMode,
         address: SevenBitAddress,
         i2c: &mk20d7::I2C0,
-        buffer: &[u8],
         done: &mut AtomicBool,
     ) -> Self {
         I2CState {
             mode,
             i2c,
-            buffer,
             done,
             status: I2CStatus::AddressSend(address),
         }
@@ -165,11 +187,6 @@ impl I2CState {
 
     fn rx_ok(&self) -> bool {
         self.i2c().s.read().rxak().bit_is_clear()
-    }
-
-    fn send_address(&mut self, addr: SevenBitAddress) {
-        self.i2c().a1.write(|w| unsafe { w.bits(addr) });
-        self.status = I2CStatus::AddressSent;
     }
 
     fn send_byte(&mut self, byte: u8) {
@@ -189,23 +206,34 @@ impl I2CState {
         self.i2c().d.write(|w| unsafe { w.bits(byte) });
     }
 
-    fn next_byte(&mut self) -> Option<u8> {
-        match self.status {
-            I2CStatus::Run(loc) => {
-                if let Some(byte) = unsafe { &*self.buffer }.get(loc) {
-                    self.status = I2CStatus::Run(loc + 1);
-                    Some(*byte)
-                } else {
-                    None
-                }
-            }
-            _ => None,
+    fn next_byte(&mut self, buffer: *const [u8], loc: usize) -> Option<u8> {
+        if let Some(byte) = unsafe { &*buffer }.get(loc) {
+            self.status = I2CStatus::Run(loc + 1);
+            Some(*byte)
+        } else {
+            None
         }
     }
 
-    fn maybe_transmit(&mut self) {
-        match self.next_byte() {
-            Some(b) => self.send_byte(b),
+    fn maybe_receive(&mut self, buffer: *mut [u8], loc: &mut usize) {
+        let buf: &mut [u8] = unsafe { &mut *buffer };
+
+        if *loc == buf.len() - 1 {
+            self.stop_signal()
+        } else if *loc == buf.len() - 2 {
+            self.i2c().c1.write(|w| w.txak().set_bit());
+        }
+
+        buf[*loc] = self.get_byte();
+        *loc += 1;
+    }
+
+    fn maybe_transmit(&mut self, buffer: *const [u8], loc: &mut usize) {
+        match self.next_byte(buffer, *loc) {
+            Some(b) => {
+                self.send_byte(b);
+                *loc += 1;
+            }
             None => {
                 self.stop_signal();
                 self.mark_done();
@@ -233,22 +261,30 @@ fn i2c0() {
     I2C0_STATE
         .try_lock(|state| match (state.mode, state.status) {
             (I2CMode::SecondaryRx | I2CMode::SecondaryTx, _) => todo!(),
-            (_, I2CStatus::AddressSend(addr)) => state.send_address(addr),
+            (_, I2CStatus::AddressSend(addr)) => {
+                state.set_byte(addr);
+                state.status = I2CStatus::AddressSent;
+            }
             (_, I2CStatus::AddressSent) => {
                 if state.i2c().s.read().rxak().bit_is_clear() {
-                    state.status = I2CStatus::Run(0);
+                    let mut loc = 0;
                     match state.mode {
-                        I2CMode::PrimaryTx => state.maybe_transmit(),
-                        I2CMode::PrimaryRx => {
+                        I2CMode::PrimaryTx(buf) => state.maybe_transmit(buf, &mut loc),
+                        I2CMode::PrimaryRx(_) => {
                             state.i2c().c1.write(|w| w.tx().clear_bit());
                             let _ = state.get_byte();
                         }
-                        _ => unreachable!(),
+                        _ => unreachable!(), // Secondary covered by first branch
                     }
+                    state.status = I2CStatus::Run(loc);
                 }
             }
-            (I2CMode::PrimaryTx, I2CStatus::Run(_)) => state.maybe_transmit(),
-            (I2CMode::PrimaryRx, I2CStatus::Run(_)) => todo!("rx"),
+            (I2CMode::PrimaryTx(buf), I2CStatus::Run(mut loc)) => {
+                state.maybe_transmit(buf, &mut loc)
+            }
+            (I2CMode::PrimaryRx(buf), I2CStatus::Run(mut loc)) => {
+                state.maybe_receive(buf, &mut loc)
+            }
         })
         .ok();
 }
