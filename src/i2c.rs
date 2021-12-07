@@ -38,7 +38,7 @@ pub struct I2C0<SDA, SCL> {
 }
 
 impl<SDA, SCL> I2C0<SDA, SCL> {
-    pub fn i2c0(
+    pub fn init(
         i2c: mk20d7::I2C0,
         _pins: (SDA, SCL),
         baud: u32,
@@ -71,6 +71,8 @@ impl<SDA, SCL> I2C0<SDA, SCL> {
             while !done.load(Ordering::Relaxed) {
                 cortex_m::asm::wfi()
             }
+
+            I2C0_STATE.try_free().ok();
         }
     }
 }
@@ -120,8 +122,8 @@ fn find_freq(target: u32, bus: u32) -> (u8, u8) {
     let mut idx: usize = 0;
     let mut mul: usize = 0;
 
-    for (i, d) in DIVISIONS.into_iter().enumerate() {
-        for (j, m) in MULT.into_iter().enumerate() {
+    for (i, d) in DIVISIONS.iter().enumerate() {
+        for (j, m) in MULT.iter().enumerate() {
             let calc = bus / (d * m);
             // no abs_diff in stable
             let diff = if calc > target {
@@ -182,6 +184,7 @@ impl I2CState {
     }
 
     fn i2c(&self) -> &mk20d7::I2C0 {
+        // SAFETY: i2c will exist as long as `done` hasn't been set
         unsafe { &*self.i2c }
     }
 
@@ -203,10 +206,12 @@ impl I2CState {
     }
 
     fn set_byte(&mut self, byte: u8) {
+        // SAFETY: always safe to write into the data register
         self.i2c().d.write(|w| unsafe { w.bits(byte) });
     }
 
     fn next_byte(&mut self, buffer: *const [u8], loc: usize) -> Option<u8> {
+        // SAFETY: buffer exists as long as `done` hasn't been set.
         if let Some(byte) = unsafe { &*buffer }.get(loc) {
             self.status = I2CStatus::Run(loc + 1);
             Some(*byte)
@@ -216,6 +221,7 @@ impl I2CState {
     }
 
     fn maybe_receive(&mut self, buffer: *mut [u8], loc: &mut usize) {
+        // SAFETY: buffer exists as long as `done` hasn't been set
         let buf: &mut [u8] = unsafe { &mut *buffer };
 
         if *loc == buf.len() - 1 {
@@ -246,6 +252,8 @@ impl I2CState {
     }
 
     fn mark_done(&self) {
+        // SAFETY: as long as Done is false, this address will exist.
+        // after Done is set to true, this state object will be freed atomically
         unsafe { &*self.done }.store(true, Ordering::Relaxed)
     }
 }
@@ -256,6 +264,7 @@ const I2C0_S: *mut u8 = 0x4006_6003 as *mut u8;
 
 fn i2c0() {
     // Clear flag no matter what, or we're deadlocked
+    // SAFETY: this is memory-mapped hardware
     unsafe { *I2C0_S |= 0b0000_0010 }
 
     I2C0_STATE
